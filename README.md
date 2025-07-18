@@ -127,12 +127,30 @@ service:
   type: ClusterIP
   port: 80
 ingress:
-  enabled: false
+  enabled: false  
+  annotations: {}
+  hosts:
+    - host: chart-example.local
+      paths: []
+  tls: []
+autoscaling:
+  enabled: 
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+serviceAccount:
+  create: false 
+  annotations: {}
+  name: ""
+```
+
+### Remove Unused Templates
+```bash
+rm my-app/templates/serviceaccount.yaml my-app/templates/hpa.yaml my-app/templates/tests/test-connection.yaml
 ```
 
 
 ## 1.3: Deploy Helm Chart via ArgoCD
-
 
 ### Start Minikube and Check Cluster health
 
@@ -160,7 +178,9 @@ echo "ArgoCD Admin Password: $INITIAL_PASSWORD"
 ```
 
 
-### Access ArgoCD UI:
+### Sync the ArgoCD Application
+
+- Access ArgoCD UI:
 ```bash
 kubectl port-forward svc/argocd-server -n argocd 8080:443
 ```
@@ -204,6 +224,7 @@ kubectl apply -f helm-app.yaml
 ![](./img/1c.kube.apply.png)
 
 
+
 ### Push to GitHub
 ```bash
 git add .
@@ -211,6 +232,27 @@ git commit -m "new update"
 git branch -M main
 git remote add origin https://github.com/your-username/gitops-project.git
 git push -u origin main
+```
+
+### Test Helm Chart Locally:
+```bash
+helm lint my-app
+```
+
+### Sync the ArgoCD Application
+
+- In the ArgoCD UI, click the SYNC button for my-app-helm.
+
+
+- Or Login via CLI
+```bash
+kubectl get pods -n argocd
+kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath="{.data.password}" | base64 -d && echo
+argocd login localhost:8080 --username admin --password <copied-password> --insecure
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+argocd login localhost:8080 --username admin --password $INITIAL_PASSWORD --grpc-web
+argocd app sync my-app-helm
 ```
 
 
