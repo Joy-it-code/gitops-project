@@ -8,3 +8,7 @@ service:
   port: 80
 ingress:
   enabled: false
+serviceAccount:
+  create: true  
+  annotations: {}
+  name: ""

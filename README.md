@@ -205,7 +205,7 @@ kubectl apply -f helm-app.yaml
 
 
 ### Push to GitHub
-```
+```bash
 git add .
 git commit -m "new update"
 git branch -M main
