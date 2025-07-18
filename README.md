@@ -6,15 +6,6 @@ This project demonstrates advanced GitOps configuration management using **ArgoC
 
 ---
 
-## Project Structure
-
-# GitOps Configuration Management with ArgoCD
-
-## Overview
-
-This project demonstrates advanced GitOps configuration management using **ArgoCD**, integrating **Helm**, **Kustomize**, and **external secret managers** like **Vault** and **AWS Secrets Manager**. It showcases best practices for secure, declarative Kubernetes application deployment.
-
----
 
 ## Project Structure
 
@@ -218,7 +209,7 @@ kubectl apply -f helm-app.yaml
 git add .
 git commit -m "new update"
 git branch -M main
-git remote add origin https://github.com/Joy-it-code/gitops-project.git
+git remote add origin https://github.com/your-username/gitops-project.git
 git push -u origin main
 ```
 
