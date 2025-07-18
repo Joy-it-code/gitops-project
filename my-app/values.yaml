@@ -18,3 +18,7 @@ autoscaling:
   minReplicas: 1
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
+serviceAccount:
+  create: false  
+  annotations: {}
+  name: ""
