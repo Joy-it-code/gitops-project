@@ -255,10 +255,328 @@ argocd login localhost:8080 --username admin --password $INITIAL_PASSWORD --grpc
 argocd app sync my-app-helm
 ```
 
+![](./img/2a.healthpg1.png)
+![](./img/2b.synced.pg1.png)
+
+
 
 ### Test Helm Deployment:
 ```bash
 kubectl get pods -n default
 kubectl get svc -n default
 argocd app get my-app-helm
+```
+![](./img/2c.pods.png)
+
+
+---
+
+## 2: Create `Kustomize` Configuration
+
+### Create a `Kustomize base` and `overlays` for environment-specific configurations.
+
+### 2.1: Create `Base` Configuration
+```bash
+mkdir -p my-app/base
+```
+
+### Create `my-app/base/deployment.yaml`:
+
+```bash
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-app
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+```        
+
+
+### Create `my-app/base/service.yaml`:
+
+```bash
+apiVersion: v1
+kind: Service
+metadata:
+  name: my-app
+  namespace: default
+spec:
+  selector:
+    app: my-app
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP
+```
+
+
+
+### Create `my-app/base/kustomization.yaml`:
+```bash
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- deployment.yaml
+- service.yaml
+```
+
+
+## 2.2: Create `Dev Overlay`
+
+```bash
+mkdir -p my-app/overlays/dev
+```
+
+### Create `my-app/overlays/dev/patch.yaml`:
+
+```bash
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 2
+
+```
+
+
+### Create `my-app/overlays/dev/kustomization.yaml`:
+```bash
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+bases:
+- ../../base
+patchesStrategicMerge:
+- patch.yaml
+```
+
+
+### Create `Prod Overlay`:
+```bash
+mkdir -p my-app/overlays/prod
+```
+
+### Create `my-app/overlays/prod/patch.yaml`:
+
+```bash
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 3
+```
+
+
+### Create `my-app/overlays/prod/kustomization.yaml`:
+
+```bash
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+bases:
+- ../../base
+patchesStrategicMerge:
+- patch.yaml
+```
+
+
+### Commit Kustomize Configurations:
+
+```bash
+cd my-app/overlays/dev
+kustomize build .
+cd ../../overlays/prod
+kustomize  build .
+cd ../../base
+kustomize build .
+git add my-app/base my-app/overlays
+git commit -m "Add Kustomize base and overlays"
+git push origin main
+```
+
+
+### Create `my-app/overlays/dev/deployment-patch.yaml`
+```bash
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-app
+spec:
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: my-app
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+```
+
+### Test Configuration Locally
+```bash
+cd my-app/overlays/dev
+kustomize build .
+```
+
+### Commit Kustomize Configurations:
+```bash
+git add my-app/base my-app/overlays
+git commit -m "Add Kustomize base and overlays"
+git push origin main
+```
+
+
+## 5: Deploy Kustomize via ArgoCD
+
+- Create an ArgoCD application for the `dev overlay`:
+```bash
+touch kustomize-dev-app.yaml
+```
+```bash
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app-kustomize-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: <your-git-repo-url>
+    targetRevision: main
+    path: my-app/overlays/dev
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```      
+
+### Apply the application for `dev`:
+
+```bash
+cd my-app/overlays/dev
+kubectl apply -f kustomize-dev-app.yaml
+kubectl create namespace dev
+```
+![](./img/3a.apply.dev.png)
+
+**Push to github**
+
+
+### Verify and Sync the dev Application
+
+
+- Access ArgoCD UI:
+```bash
+kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443
+```
+
+- Open `https://localhost:8080` on Browser
+![](./img/3d.healthy.both.png)
+![](./img/3b.sync.kust.png)
+
+
+### Test Kustomize Deployment:
+```bash
+kubectl get pods -n dev
+kubectl get svc -n dev
+argocd app get my-app-kustomize-dev
+```
+![](./img/3c.get.pod.svc.png)
+
+
+
+
+
+### Create and Apply the `prod` Application Manifest
+
+
+# Apply the application for `prod`:
+```bash
+cd gitops-project
+touch kustomize-prod-app.yaml
+```
+
+### Paste:
+```bash
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app-kustomize-prod  
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Joy-it-code/gitops-project.git  
+    path: my-app/overlays/prod    
+    targetRevision: main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: production        
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```      
+
+
+### Apply the manifest:
+```bash
+kubectl apply -f kustomize-prod-app.yaml
+```
+
+### Create the production Namespace
+```bash
+kubectl create namespace production
+```
+
+### Verify:
+```bash
+kubectl get namespaces
+```
+![](./img/3e.apply.get.namesp.prod.png)
+
+
+### Push to GitHub
+```bash
+git add .
+git commit -m "kustomization app"
+git push
+```
+
+
+### Sync the `prod` Application via UI or CLI
+```bash
+kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443
+```
+**Open `https://localhost:8080` in your browser.**
+
+
+
+
+### Verify the `prod` Deployment
+
+- Check pods and services:
+```bash
+kubectl get pods -n production  
+kubectl get svc -n production  
 ```
