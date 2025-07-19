@@ -508,9 +508,6 @@ argocd app get my-app-kustomize-dev
 
 
 ### Create and Apply the `prod` Application Manifest
-
-
-# Apply the application for `prod`:
 ```bash
 cd gitops-project
 touch kustomize-prod-app.yaml
@@ -570,6 +567,8 @@ kubectl port-forward --address 0.0.0.0 svc/argocd-server -n argocd 8080:443
 ```
 **Open `https://localhost:8080` in your browser.**
 
+![](./img/4a.healthy.pg1.prod.png)
+![](./img/4b.healthy.prod.png)
 
 
 
