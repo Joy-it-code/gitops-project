@@ -49,7 +49,6 @@ spec:
             secretKeyRef:
               name: my-secret
               key: password
-              protocol: TCP
           {{- with .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
