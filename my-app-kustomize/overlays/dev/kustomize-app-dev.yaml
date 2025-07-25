@@ -1,0 +1,18 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app-kustomize-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Joy-it-code/gitops-project.git
+    path: my-app-kustomize/overlays/dev
+    targetRevision: main
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
