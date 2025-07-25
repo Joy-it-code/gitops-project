@@ -102,8 +102,10 @@ git commit -m "Initial commit"
 - Create a Helm chart for a simple application (e.g., a basic Nginx deployment).
 
 ```bash
+cd my-app
 helm create my-app
 ```
+
 
 ### Edit `my-app/Chart.yaml` to set metadata:
 
@@ -121,36 +123,35 @@ appVersion: "1.16.0"
 replicaCount: 1
 image:
   repository: nginx
-  tag: "latest"
   pullPolicy: IfNotPresent
+  tag: "latest"
 service:
   type: ClusterIP
   port: 80
 ingress:
-  enabled: false  
+  enabled: false
+  className: ""
   annotations: {}
   hosts:
     - host: chart-example.local
-      paths: []
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
   tls: []
 autoscaling:
-  enabled: 
+  enabled: false
   minReplicas: 1
-  maxReplicas: 10
+  maxReplicas: 3
   targetCPUUtilizationPercentage: 80
 serviceAccount:
-  create: false 
+  create: false
   annotations: {}
   name: ""
 ```
 
-### Remove Unused Templates
-```bash
-rm my-app/templates/serviceaccount.yaml my-app/templates/hpa.yaml my-app/templates/tests/test-connection.yaml
-```
-
 
 ---
+
 
 ## 1.3: Deploy Helm Chart via ArgoCD
 
@@ -169,14 +170,22 @@ kubectl cluster-info
 ```bash
 kubectl create namespace argocd
 helm repo add argo https://argoproj.github.io/argo-helm
-helm install argocd argo/argo-cd --namespace argocd --version 5.46.8
+helm install argocd argo/argo-cd --namespace argocd 
 ```
 ![](./img/1b.deployed.argocd.png)
 
 
-### Get ArgoCD Admin Password:
+### Verify ArgoCD Installation:
 ```bash
-INITIAL_PASSWORD=$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d)
+kubectl get pods -n argocd
+```
+
+
+### Access ArgoCD UI:
+
+- Get ArgoCD Admin Password and set up port-forwarding:
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
 echo "ArgoCD Admin Password: $INITIAL_PASSWORD"
 ```
 
@@ -192,7 +201,9 @@ kubectl port-forward svc/argocd-server -n argocd 8080:443
 
 
 
-### Create ArgoCD Application for Helm: 
+### Deploy Helm Chart via ArgoCD
+
+- Create ArgoCD Application for Helm: 
 
 - Create a file `helm-app.yaml`:
 ```bash
@@ -228,6 +239,11 @@ kubectl apply -f helm-app.yaml
 
 
 
+### Test Helm Chart Locally:
+```bash
+helm lint .
+```
+
 ### Push to GitHub
 ```bash
 git add .
@@ -237,25 +253,22 @@ git remote add origin https://github.com/your-username/gitops-project.git
 git push -u origin main
 ```
 
-### Test Helm Chart Locally:
-```bash
-helm lint my-app
-```
 
-### Sync the ArgoCD Application
+
+### Verify Deployment:
 
 - In the ArgoCD UI, click the SYNC button for my-app-helm.
 
 
 - Or Login via CLI
 ```bash
-kubectl get pods -n argocd
-kubectl -n argocd get secret argocd-initial-admin-secret \
-  -o jsonpath="{.data.password}" | base64 -d && echo
-argocd login localhost:8080 --username admin --password <copied-password> --insecure
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+argocd login localhost:8080 --username admin --password <password-from-above>
 kubectl port-forward svc/argocd-server -n argocd 8080:443
-argocd login localhost:8080 --username admin --password $INITIAL_PASSWORD --grpc-web
+kubectl get pods,svc -n default
+kubectl get pods -n argocd
 argocd app sync my-app-helm
+argocd app get my-app-helm
 ```
 
 ![](./img/2a.healthpg1.png)
@@ -274,7 +287,15 @@ argocd app get my-app-helm
 
 ---
 
-## 2: Create `Kustomize` Configuration
+## 2: Utilizing `Kustomize` in ArgoCD
+
+### Create Kustomize directory structure:
+```bash
+cd gitops-project
+mkdir -p my-app-kustomize/base
+mkdir -p my-app-kustomize/overlays/dev
+mkdir -p my-app-kustomize/overlays/prod
+```
 
 ### Create a `Kustomize base` and `overlays` for environment-specific configurations.
 
@@ -283,7 +304,7 @@ argocd app get my-app-helm
 mkdir -p my-app/base
 ```
 
-### Create `my-app/base/deployment.yaml`:
+### Create `my-app-kustomize/base/deployment.yaml`:
 
 ```bash
 apiVersion: apps/v1
@@ -309,7 +330,7 @@ spec:
 ```        
 
 
-### Create `my-app/base/service.yaml`:
+### Create `my-app-kustomize/base/service.yaml`:
 
 ```bash
 apiVersion: v1
@@ -328,7 +349,7 @@ spec:
 
 
 
-### Create `my-app/base/kustomization.yaml`:
+### Create `my-app-kustomize/base/kustomization.yaml`:
 ```bash
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -344,7 +365,7 @@ resources:
 mkdir -p my-app/overlays/dev
 ```
 
-### Create `my-app/overlays/dev/patch.yaml`:
+### Create `my-app-kustomize/overlays/dev/patch.yaml`:
 
 ```bash
 apiVersion: apps/v1
@@ -357,7 +378,7 @@ spec:
 ```
 
 
-### Create `my-app/overlays/dev/kustomization.yaml`:
+### Create `my-app-kustomize/overlays/dev/kustomization.yaml`:
 ```bash
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
@@ -400,11 +421,7 @@ patchesStrategicMerge:
 ### Commit Kustomize Configurations:
 
 ```bash
-cd my-app/overlays/dev
-kustomize build .
-cd ../../overlays/prod
-kustomize  build .
-cd ../../base
+cd my-app-kustomize/base
 kustomize build .
 git add my-app/base my-app/overlays
 git commit -m "Add Kustomize base and overlays"
@@ -440,7 +457,7 @@ kustomize build .
 
 ### Commit Kustomize Configurations:
 ```bash
-git add my-app/base my-app/overlays
+git add .
 git commit -m "Add Kustomize base and overlays"
 git push origin main
 ```
@@ -453,7 +470,7 @@ git push origin main
 
 - Create an ArgoCD application for the `dev overlay`:
 ```bash
-touch kustomize-dev-app.yaml
+touch kustomize-app-dev.yaml
 ```
 ```bash
 apiVersion: argoproj.io/v1alpha1
