@@ -1,0 +1,23 @@
+repoServer:
+  extraContainers:
+  - name: argocd-vault-plugin
+    command:
+    - /var/run/argocd/argocd-cmp-server
+    image: alpine/k8s:1.24.16
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 999
+    env:
+    - name: AVP_TYPE
+      value: vault
+    - name: VAULT_ADDR
+      value: http://vault.vault.svc.cluster.local:8200
+    - name: AVP_AUTH_TYPE
+      value: token
+    - name: VAULT_TOKEN
+      value: root
+    volumeMounts:
+    - mountPath: /var/run/argocd
+      name: var-files
+    - mountPath: /home/argocd/cmp-server/plugins
+      name: plugins
