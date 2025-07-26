@@ -4,7 +4,7 @@ repoServer:
     command:
     - argocd-vault-plugin
     - server
-    image: quay.io/argoproj/argocd-vault-plugin:v2.1.0
+    image: quay.io/argoproj/argocd-vault-plugin:v1.15.0
     securityContext:
       runAsNonRoot: true
       runAsUser: 999
